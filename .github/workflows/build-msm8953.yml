@@ -45,17 +45,17 @@ jobs:
         export ARCH=arm64
         export CROSS_COMPILE=$GITHUB_WORKSPACE/toolchain/bin/aarch64-linux-android-
         export CROSS_COMPILE_ARM32=$GITHUB_WORKSPACE/toolchain32/bin/arm-linux-androideabi-
-        
+    
         # Konfigurasi Manual Hook: Aktifkan KSU & Manual Hook, Matikan Kprobe
         scripts/config --file arch/arm64/configs/mido_defconfig \
           -e CONFIG_KSU \
           -e CONFIG_KSU_MANUAL_HOOK \
           -d CONFIG_KPROBES \
           -d CONFIG_KPROBE_EVENTS
-          
-        # Build Kernel
-        make O=out ARCH=arm64 HOSTCFLAGS+="-fcommon" KCFLAGS="-w" mido_defconfig
-        make O=out ARCH=arm64 HOSTCFLAGS+="-fcommon" KCFLAGS="-w" -j$(nproc --all)
+      
+        # Build Kernel (Menambahkan LD untuk memaksa linker dari GCC)
+        make O=out ARCH=arm64 HOSTCFLAGS+="-fcommon" KCFLAGS="-w" LD=$GITHUB_WORKSPACE/toolchain/bin/aarch64-linux-android-ld mido_defconfig
+        make O=out ARCH=arm64 HOSTCFLAGS+="-fcommon" KCFLAGS="-w" LD=$GITHUB_WORKSPACE/toolchain/bin/aarch64-linux-android-ld -j$(nproc --all)
 
     - name: Upload Kernel Image
       uses: actions/upload-artifact@v4
