@@ -18,7 +18,7 @@ jobs:
 
     - name: Clone Kernel Source
       run: |
-        git clone --depth=1 https://github.com/Rafiester/kernel_xiaomi_msm8953-3.18.git kernel-source
+        git clone -b ten-uc --depth=1 https://github.com/Rafiester/kernel_xiaomi_msm8953-3.18.git kernel-source
 
     - name: Integrate SukiSU Ultra
       run: |
