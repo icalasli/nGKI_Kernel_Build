@@ -1,0 +1,45 @@
+name: Build MSM8953 Kernel 3.18
+
+on:
+  workflow_dispatch:  # Ini yang bikin tombol "Run workflow" muncul
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+    - name: Checkout Repository
+      uses: actions/checkout@v4
+
+    - name: Install Dependencies
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y bc bison build-essential ccache curl flex g++-multilib gcc-multilib git gnupg gperf imagemagick lib32ncurses5-dev lib32readline-dev lib32z1-dev libelf-dev liblz4-tool libncurses5 libncurses5-dev libsdl1.2-dev libssl-dev libxml2 libxml2-utils lzop pngcrush rsync schedtool squashfs-tools xsltproc zip zlib1g-dev
+
+    - name: Clone Kernel Source
+      run: |
+        git clone --depth=1 https://github.com/Rafiester/kernel_xiaomi_msm8953-3.18.git kernel-source
+
+    - name: Integrate SukiSU Ultra
+      run: |
+        cd kernel-source
+        curl -LSs "https://raw.githubusercontent.com/SukiSU-Ultra/SukiSU-Ultra/main/kernel/setup.sh" | bash -s builtin
+
+    - name: Setup Toolchain (GCC 4.9)
+      run: |
+        git clone --depth=1 https://github.com/LineageOS/android_prebuilts_gcc_linux-x86_aarch64_aarch64-linux-android-4.9.git toolchain
+
+    - name: Build Kernel
+      run: |
+        cd kernel-source
+        export ARCH=arm64
+        export CROSS_COMPILE=$GITHUB_WORKSPACE/toolchain/bin/aarch64-linux-android-
+        # Ganti 'msm8953_defconfig' dengan nama defconfig perangkatmu jika berbeda
+        make O=out msm8953_defconfig
+        make O=out -j$(nproc --all)
+
+    - name: Upload Kernel Image
+      uses: actions/upload-artifact@v4
+      with:
+        name: Kernel-Image
+        path: kernel-source/out/arch/arm64/boot/Image.gz-dtb
