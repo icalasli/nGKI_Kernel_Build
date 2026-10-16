@@ -35,7 +35,7 @@ jobs:
         export ARCH=arm64
         export CROSS_COMPILE=$GITHUB_WORKSPACE/toolchain/bin/aarch64-linux-android-
         # Ganti 'msm8953_defconfig' dengan nama defconfig perangkatmu jika berbeda
-        make O=out msm8953_defconfig
+        make O=out mido_defconfig
         make O=out -j$(nproc --all)
 
     - name: Upload Kernel Image
