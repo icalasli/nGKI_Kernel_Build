@@ -28,30 +28,37 @@ jobs:
         # Jalankan script setup bawaan KernelSU Next
         curl -LSs "https://raw.githubusercontent.com/KernelSU-Next/KernelSU-Next/next/kernel/setup.sh" | bash -s legacy
         
-        # PERBAIKAN: Paksa pembuatan symlink dari folder KernelSU ke drivers/kernelsu
+        # PERBAIKAN: Pastikan nama folder selalu 'KernelSU' dan buat jika belum ada
+        if [ -d "KernelSU-Next" ]; then mv KernelSU-Next KernelSU; fi
+        mkdir -p KernelSU
+        
+        # Paksa pembuatan symlink
         rm -rf drivers/kernelsu
         ln -sf "$(pwd)/KernelSU/kernel" "$(pwd)/drivers/kernelsu"
         
-        # PERBAIKAN: Pastikan drivers/Kconfig memuat konfigurasi KernelSU
+        # Pastikan konfigurasi terdaftar
         grep -q "drivers/kernelsu/Kconfig" drivers/Kconfig || sed -i "/endmenu/i\\source \"drivers/kernelsu/Kconfig\"" drivers/Kconfig
-        
-        # PERBAIKAN: Pastikan drivers/Makefile memuat direktori kernelsu
         grep -q "kernelsu/" drivers/Makefile || echo "obj-\$(CONFIG_KSU) += kernelsu/" >> drivers/Makefile
 
     - name: Apply SUSFS Patches (For Kernel 4.9)
       run: |
         cd kernel-source
         
+        # 1. Patch set_memory
         patch -p1 < ../jack-patches/Patches/Patch/set_memory_to_49_and_low.patch || true
         
-        cp ../ksu-patches/kernel_patches/KernelSU/10_enable_susfs_for_ksu.patch ./KernelSU/
+        # 2. Patch folder KernelSU (Pastikan foldernya ada dulu)
+        mkdir -p KernelSU
+        cp ../ksu-patches/kernel_patches/KernelSU/10_enable_susfs_for_ksu.patch ./KernelSU/ || true
         cd KernelSU
         patch -p1 < 10_enable_susfs_for_ksu.patch || true
         cd ..
         
+        # 3. Patch utama kernel 4.9
         cp ../jack-patches/Patches/Patch/susfs_patch_to_4.9.patch ./
         patch -p1 < susfs_patch_to_4.9.patch || true
         
+        # 4. Salin file pendukung
         cp -r ../ksu-patches/kernel_patches/fs/* ./fs/ || true
         cp -r ../ksu-patches/kernel_patches/include/linux/* ./include/linux/ || true
 
@@ -67,6 +74,7 @@ jobs:
         export CROSS_COMPILE=$GITHUB_WORKSPACE/toolchain/bin/aarch64-linux-android-
         export CROSS_COMPILE_ARM32=$GITHUB_WORKSPACE/toolchain32/bin/arm-linux-androideabi-
         
+        # Konfigurasi: Aktifkan KSU & SUSFS, Matikan Kprobe & LTO
         scripts/config --file arch/arm64/configs/mido_defconfig \
           -e CONFIG_KSU \
           -e CONFIG_KSU_SUSFS \
@@ -75,6 +83,7 @@ jobs:
           -d CONFIG_LTO_CLANG \
           -d CONFIG_LTO_NONE
         
+        # Build
         make O=out ARCH=arm64 HOSTCFLAGS="-fcommon -w" KCFLAGS="-w" LD=$GITHUB_WORKSPACE/toolchain/bin/aarch64-linux-android-ld mido_defconfig
         make O=out ARCH=arm64 HOSTCFLAGS="-fcommon -w" KCFLAGS="-w" LD=$GITHUB_WORKSPACE/toolchain/bin/aarch64-linux-android-ld -j$(nproc --all)
 
