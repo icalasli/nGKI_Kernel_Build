@@ -21,7 +21,7 @@ jobs:
         # Clone source kernel 4.9 milikmu
         git clone -b lineage-17.1 --depth=1 https://github.com/icalasli/kernel_xiaomi_msm8953-4.9.git kernel-source
         
-        # Clone repositori JackA1ltman untuk mendapatkan patch SUSFS 4.9
+        # Clone repositori JackA1ltman untuk patch SUSFS 4.9
         git clone -b mainline --depth=1 https://github.com/JackA1ltman/NonGKI_Kernel_Build_2nd.git jack-patches
         
         # Clone repositori kutemeikito untuk patch KernelSU
@@ -30,7 +30,6 @@ jobs:
     - name: Integrate KernelSU Next
       run: |
         cd kernel-source
-        # Gunakan branch 'legacy' untuk kernel Non-GKI
         curl -LSs "https://raw.githubusercontent.com/KernelSU-Next/KernelSU-Next/next/kernel/setup.sh" | bash -s legacy
         
         if [ -d "KernelSU-Next" ]; then mv KernelSU-Next KernelSU; fi
@@ -78,9 +77,9 @@ jobs:
           -d CONFIG_LTO_CLANG \
           -d CONFIG_LTO_NONE
         
-        # Build
-        make O=out ARCH=arm64 HOSTCFLAGS+="-fcommon" KCFLAGS="-w" LD=$GITHUB_WORKSPACE/toolchain/bin/aarch64-linux-android-ld mido_defconfig
-        make O=out ARCH=arm64 HOSTCFLAGS+="-fcommon" KCFLAGS="-w" LD=$GITHUB_WORKSPACE/toolchain/bin/aarch64-linux-android-ld -j$(nproc --all)
+        # Build (Menggunakan HOSTCFLAGS dan KCFLAGS agar lebih kuat terhadap error lama)
+        make O=out ARCH=arm64 HOSTCFLAGS="-fcommon -w" KCFLAGS="-w" LD=$GITHUB_WORKSPACE/toolchain/bin/aarch64-linux-android-ld mido_defconfig
+        make O=out ARCH=arm64 HOSTCFLAGS="-fcommon -w" KCFLAGS="-w" LD=$GITHUB_WORKSPACE/toolchain/bin/aarch64-linux-android-ld -j$(nproc --all)
 
     - name: Upload Kernel Image
       uses: actions/upload-artifact@v4
