@@ -18,33 +18,36 @@ jobs:
 
     - name: Clone Kernel Source & SUSFS Patches
       run: |
-        # 1. Clone source kernel 4.9 milikmu
+        # Clone source kernel 4.9 milikmu
         git clone -b lineage-17.1 --depth=1 https://github.com/icalasli/kernel_xiaomi_msm8953-4.9.git kernel-source
-        
-        # 2. Clone repositori SUSFS (gunakan branch/tag yang sesuai)
+        # Clone repositori SUSFS
         git clone -b kernel-4.14 --depth=1 https://github.com/kutemeikito/susfs4ksu.git susfs-patches
 
     - name: Integrate KernelSU Next
       run: |
         cd kernel-source
-        # Gunakan branch 'legacy' untuk kernel Non-GKI seperti 4.9
+        # Gunakan branch 'legacy' untuk kernel Non-GKI
         curl -LSs "https://raw.githubusercontent.com/KernelSU-Next/KernelSU-Next/next/kernel/setup.sh" | bash -s legacy
+        
+        # PERBAIKAN: Pastikan nama folder selalu 'KernelSU'
+        if [ -d "KernelSU-Next" ]; then mv KernelSU-Next KernelSU; fi
+        if [ ! -d "KernelSU" ]; then mkdir KernelSU; fi
 
     - name: Apply SUSFS Patches
       run: |
         cd kernel-source
         
-        # Terapkan patch ke folder KernelSU terlebih dahulu
+        # 1. Patch folder KernelSU
         cp ../susfs-patches/kernel_patches/KernelSU/10_enable_susfs_for_ksu.patch ./KernelSU/
         cd KernelSU
         patch -p1 < 10_enable_susfs_for_ksu.patch
         cd ..
         
-        # Terapkan patch utama ke kernel
+        # 2. Patch utama kernel
         cp ../susfs-patches/kernel_patches/50_add_susfs_in_kernel.patch ./
         patch -p1 < 50_add_susfs_in_kernel.patch
         
-        # Salin file pendukung (jika ada)
+        # 3. Salin file pendukung
         cp -r ../susfs-patches/kernel_patches/fs/* ./fs/
         cp -r ../susfs-patches/kernel_patches/include/linux/* ./include/linux/
 
@@ -60,7 +63,7 @@ jobs:
         export CROSS_COMPILE=$GITHUB_WORKSPACE/toolchain/bin/aarch64-linux-android-
         export CROSS_COMPILE_ARM32=$GITHUB_WORKSPACE/toolchain32/bin/arm-linux-androideabi-
         
-        # Konfigurasi: Aktifkan KSU, SUSFS, dan matikan fitur yang tidak kompatibel
+        # Konfigurasi: Aktifkan KSU & SUSFS, Matikan Kprobe & LTO
         scripts/config --file arch/arm64/configs/mido_defconfig \
           -e CONFIG_KSU \
           -e CONFIG_KSU_SUSFS \
