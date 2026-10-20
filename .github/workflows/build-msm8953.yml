@@ -1,4 +1,4 @@
-name: Build MSM8953 Kernel 4.9 (KSU Next Only)
+name: Build MSM8953 Kernel 4.9 (Ultimate KSU Next)
 
 on:
   workflow_dispatch:
@@ -11,10 +11,11 @@ jobs:
     - name: Checkout Repository
       uses: actions/checkout@v4
 
-    - name: Install Dependencies
+    - name: Install Dependencies & Ubuntu GCC 11
       run: |
         sudo apt-get update
-        sudo apt-get install -y bc bison build-essential ccache curl flex g++-multilib gcc-multilib git gnupg gperf imagemagick lib32ncurses5-dev lib32readline-dev lib32z1-dev libelf-dev liblz4-tool libncurses5 libncurses5-dev libsdl1.2-dev libssl-dev libxml2 libxml2-utils lzop pngcrush rsync schedtool squashfs-tools xsltproc zip zlib1g-dev llvm clang coccinelle
+        # Hapus gcc-multilib untuk mencegah konflik, install GCC 11 dari Ubuntu
+        sudo apt-get install -y bc bison build-essential ccache curl flex git gnupg gperf imagemagick libelf-dev liblz4-tool libncurses5 libncurses5-dev libsdl1.2-dev libssl-dev libxml2 libxml2-utils lzop pngcrush rsync schedtool squashfs-tools xsltproc zip zlib1g-dev llvm clang gcc-aarch64-linux-gnu binutils-aarch64-linux-gnu gcc-arm-linux-gnueabi
 
     - name: Clone Kernel Source & KSU Next
       run: |
@@ -23,9 +24,6 @@ jobs:
         
         # 2. Clone KernelSU Next (branch legacy)
         git clone -b legacy --depth=1 https://github.com/KernelSU-Next/KernelSU-Next.git KernelSU
-        
-        # 3. Clone repositori Coccinelle untuk manual hooks
-        git clone --depth=1 https://github.com/devnoname120/kernelsu-coccinelle.git kernelsu-coccinelle
 
     - name: Integrate KernelSU Next & Fix Symlinks
       run: |
@@ -35,35 +33,27 @@ jobs:
         # Hubungkan folder KernelSU Next ke driver kernel
         ln -sf "$(pwd)/../KernelSU/kernel" "$(pwd)/drivers/kernelsu"
         
-        # Daftarkan konfigurasi KernelSU
+        # Daftarkan konfigurasi
         grep -q "drivers/kernelsu/Kconfig" drivers/Kconfig || sed -i "/endmenu/i\\source \"drivers/kernelsu/Kconfig\"" drivers/Kconfig
         grep -q "kernelsu/" drivers/Makefile || echo "obj-\$(CONFIG_KSU) += kernelsu/" >> drivers/Makefile
 
-    - name: Apply Manual Hooks (Coccinelle)
+    - name: Apply Official Manual Hooks
       run: |
-        cd kernelsu-coccinelle/scope-minimized-hooks
-        chmod +x apply.sh
-        # Terapkan patch hook ke kernel
-        ./apply.sh $GITHUB_WORKSPACE/kernel-source || true
-
-    - name: Setup Toolchain (LineageOS Prebuilt)
-      run: |
-        git clone --depth=1 https://github.com/LineageOS/android_prebuilts_gcc_linux-x86_aarch64_aarch64-linux-android-4.9.git toolchain
-        git clone --depth=1 https://github.com/LineageOS/android_prebuilts_gcc_linux-x86_arm_arm-linux-androideabi-4.9.git toolchain32
+        cd kernel-source
+        # Gunakan patch manual resmi dari repositori KernelSU-Next
+        # Ini memastikan Kbuild mendeteksi fungsi hook dengan benar
+        curl -L -o hooks.patch https://github.com/KernelSU-Next/KernelSU-Next/raw/next/kernel_patches/syscall_hook/min_scope_syscall_hooks.patch
+        patch -p1 < hooks.patch || true
 
     - name: Build Kernel
       run: |
         cd kernel-source
         export ARCH=arm64
-        export CROSS_COMPILE=$GITHUB_WORKSPACE/toolchain/bin/aarch64-linux-android-
-        export CROSS_COMPILE_ARM32=$GITHUB_WORKSPACE/toolchain32/bin/arm-linux-androideabi-
+        # Menggunakan GCC 11 dari Ubuntu (Otomatis lolos cek versi >= 5.1)
+        export CROSS_COMPILE=aarch64-linux-gnu-
+        export CROSS_COMPILE_ARM32=arm-linux-gnueabi-
         
-        # BYPASS GCC: Hapus baris error secara paksa
-        sed -i 's/#error Sorry, your version of GCC is too old - please use 5.1 or newer.//g' include/linux/compiler-gcc.h
-        # Tambahan bypass untuk jaga-jaga
-        sed -i 's/#if GCC_VERSION < 50100/#if 0 \/\/ Bypass/' include/linux/compiler-gcc.h
-        
-        # Konfigurasi: Hanya KSU & Manual Hook (Tanpa SUSFS)
+        # Konfigurasi KSU Next
         scripts/config --file arch/arm64/configs/mido_defconfig \
           -e CONFIG_KSU \
           -e CONFIG_KSU_MANUAL_HOOK \
@@ -73,11 +63,12 @@ jobs:
           -d CONFIG_LTO_CLANG \
           -d CONFIG_LTO_NONE
         
-        make O=out ARCH=arm64 HOSTCFLAGS="-fcommon -w" KCFLAGS="-w" LD=$GITHUB_WORKSPACE/toolchain/bin/aarch64-linux-android-ld mido_defconfig
-        make O=out ARCH=arm64 HOSTCFLAGS="-fcommon -w" KCFLAGS="-w" LD=$GITHUB_WORKSPACE/toolchain/bin/aarch64-linux-android-ld -j$(nproc --all)
+        # Build (Tambahkan KCFLAGS="-Wno-error" untuk meredam error warning GCC 11)
+        make O=out ARCH=arm64 HOSTCFLAGS="-fcommon -w" KCFLAGS="-w -Wno-error" mido_defconfig
+        make O=out ARCH=arm64 HOSTCFLAGS="-fcommon -w" KCFLAGS="-w -Wno-error" -j$(nproc --all)
 
     - name: Upload Kernel Image
       uses: actions/upload-artifact@v4
       with:
-        name: Kernel-Image-4.9-KSUNext
+        name: Kernel-Image-4.9
         path: kernel-source/out/arch/arm64/boot/Image.gz-dtb
