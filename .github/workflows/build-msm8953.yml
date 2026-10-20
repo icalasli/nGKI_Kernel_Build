@@ -16,27 +16,29 @@ jobs:
         sudo apt-get update
         sudo apt-get install -y bc bison build-essential ccache curl flex g++-multilib gcc-multilib git gnupg gperf imagemagick lib32ncurses5-dev lib32readline-dev lib32z1-dev libelf-dev liblz4-tool libncurses5 libncurses5-dev libsdl1.2-dev libssl-dev libxml2 libxml2-utils lzop pngcrush rsync schedtool squashfs-tools xsltproc zip zlib1g-dev llvm clang coccinelle
 
-    - name: Clone Kernel Source, KernelSU Next, and Coccinelle Patches
+    - name: Clone Kernel Source & Patches
       run: |
-        # 1. Clone source kernel
+        # 1. Clone source kernel 4.9 milikmu
         git clone -b lineage-17.1 --depth=1 https://github.com/icalasli/kernel_xiaomi_msm8953-4.9.git kernel-source
         
-        # 2. Clone KernelSU Next (Legacy branch)
-        git clone -b next --depth=1 https://github.com/KernelSU-Next/KernelSU-Next.git KernelSU
-        
-        # 3. Clone repositori Coccinelle untuk manual hooks
+        # 2. Clone repositori Coccinelle untuk manual hooks
         git clone --depth=1 https://github.com/devnoname120/kernelsu-coccinelle.git kernelsu-coccinelle
         
-        # 4. Clone repositori patch SUSFS
+        # 3. Clone repositori patch SUSFS
         git clone -b mainline --depth=1 https://github.com/JackA1ltman/NonGKI_Kernel_Build_2nd.git jack-patches
         git clone -b kernel-4.14 --depth=1 https://github.com/kutemeikito/susfs4ksu.git ksu-patches
 
     - name: Integrate KernelSU Next & Fix Symlinks
       run: |
         cd kernel-source
-        # Hubungkan folder KernelSU ke dalam source kernel
-        rm -rf KernelSU drivers/kernelsu
-        ln -sf "$(pwd)/../KernelSU/kernel" "$(pwd)/drivers/kernelsu"
+        # Gunakan setup.sh resmi dengan argumen legacy (jangan git clone manual)
+        curl -LSs "https://raw.githubusercontent.com/KernelSU-Next/KernelSU-Next/next/kernel/setup.sh" | bash -s legacy
+        
+        # Pastikan folder bernama 'KernelSU' dan buat symlink
+        if [ -d "KernelSU-Next" ]; then mv KernelSU-Next KernelSU; fi
+        mkdir -p KernelSU
+        rm -rf drivers/kernelsu
+        ln -sf "$(pwd)/KernelSU/kernel" "$(pwd)/drivers/kernelsu"
         
         # Daftarkan konfigurasi KernelSU ke sistem build
         grep -q "drivers/kernelsu/Kconfig" drivers/Kconfig || sed -i "/endmenu/i\\source \"drivers/kernelsu/Kconfig\"" drivers/Kconfig
@@ -57,6 +59,7 @@ jobs:
         patch -p1 < ../jack-patches/Patches/Patch/set_memory_to_49_and_low.patch || true
         
         # 2. Patch folder KernelSU
+        mkdir -p KernelSU
         cp ../ksu-patches/kernel_patches/KernelSU/10_enable_susfs_for_ksu.patch ./KernelSU/ || true
         cd KernelSU
         patch -p1 < 10_enable_susfs_for_ksu.patch || true
