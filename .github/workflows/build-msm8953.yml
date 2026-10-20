@@ -1,4 +1,4 @@
-name: Build MSM8953 Kernel 4.9 (KSU Next + SUSFS + Manual Hooks)
+name: Build MSM8953 Kernel 4.9 (KSU Next + Manual Hooks + SUSFS)
 
 on:
   workflow_dispatch:
@@ -16,42 +16,39 @@ jobs:
         sudo apt-get update
         sudo apt-get install -y bc bison build-essential ccache curl flex g++-multilib gcc-multilib git gnupg gperf imagemagick lib32ncurses5-dev lib32readline-dev lib32z1-dev libelf-dev liblz4-tool libncurses5 libncurses5-dev libsdl1.2-dev libssl-dev libxml2 libxml2-utils lzop pngcrush rsync schedtool squashfs-tools xsltproc zip zlib1g-dev llvm clang coccinelle
 
-    - name: Clone Kernel Source & Patches
+    - name: Clone Kernel Source, KSU Next, and Patches
       run: |
-        # 1. Clone source kernel 4.9 milikmu
+        # 1. Clone source kernel 4.9
         git clone -b lineage-17.1 --depth=1 https://github.com/icalasli/kernel_xiaomi_msm8953-4.9.git kernel-source
         
-        # 2. Clone repositori Coccinelle untuk manual hooks
+        # 2. Clone KernelSU Next (branch legacy)
+        git clone -b legacy --depth=1 https://github.com/KernelSU-Next/KernelSU-Next.git KernelSU
+        
+        # 3. Clone Coccinelle patches
         git clone --depth=1 https://github.com/devnoname120/kernelsu-coccinelle.git kernelsu-coccinelle
         
-        # 3. Clone repositori patch SUSFS
+        # 4. Clone SUSFS patches
         git clone -b mainline --depth=1 https://github.com/JackA1ltman/NonGKI_Kernel_Build_2nd.git jack-patches
         git clone -b kernel-4.14 --depth=1 https://github.com/kutemeikito/susfs4ksu.git ksu-patches
 
     - name: Integrate KernelSU Next & Fix Symlinks
       run: |
         cd kernel-source
-        # Gunakan setup.sh resmi dengan argumen legacy (jangan git clone manual)
-        curl -LSs "https://raw.githubusercontent.com/KernelSU-Next/KernelSU-Next/next/kernel/setup.sh" | bash -s legacy
-        
-        # Pastikan folder bernama 'KernelSU' dan buat symlink
-        if [ -d "KernelSU-Next" ]; then mv KernelSU-Next KernelSU; fi
-        mkdir -p KernelSU
-        rm -rf drivers/kernelsu
-        ln -sf "$(pwd)/KernelSU/kernel" "$(pwd)/drivers/kernelsu"
+        rm -rf KernelSU drivers/kernelsu
+        ln -sf "$(pwd)/../KernelSU/kernel" "$(pwd)/drivers/kernelsu"
         
         # Daftarkan konfigurasi KernelSU ke sistem build
         grep -q "drivers/kernelsu/Kconfig" drivers/Kconfig || sed -i "/endmenu/i\\source \"drivers/kernelsu/Kconfig\"" drivers/Kconfig
         grep -q "kernelsu/" drivers/Makefile || echo "obj-\$(CONFIG_KSU) += kernelsu/" >> drivers/Makefile
 
-    - name: Apply Manual Hooks (Coccinelle)
+    - name: Apply Manual Hooks (Coccinelle) - MUST BE FIRST
       run: |
         cd kernelsu-coccinelle/classic-hooks
         chmod +x apply.sh
-        # Terapkan patch otomatis ke source kernel
+        # Terapkan hook manual ke source kernel yang masih bersih
         ./apply.sh $GITHUB_WORKSPACE/kernel-source
 
-    - name: Apply SUSFS Patches (For Kernel 4.9)
+    - name: Apply SUSFS Patches (After Manual Hooks)
       run: |
         cd kernel-source
         
@@ -85,7 +82,7 @@ jobs:
         export CROSS_COMPILE=$GITHUB_WORKSPACE/toolchain/bin/aarch64-linux-android-
         export CROSS_COMPILE_ARM32=$GITHUB_WORKSPACE/toolchain32/bin/arm-linux-androideabi-
         
-        # Konfigurasi: Aktifkan KSU Next, Manual Hook, dan SUSFS
+        # Konfigurasi: Aktifkan KSU, Manual Hook, dan SUSFS
         scripts/config --file arch/arm64/configs/mido_defconfig \
           -e CONFIG_KSU \
           -e CONFIG_KSU_MANUAL_HOOK \
